@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
+  <meta name="theme-color" content="#e94560" />
+  <title>寻宝小英雄 · 我的环球阅读冒险</title>
+  <meta name="description" content="《环球寻宝记》系列亲子伴读平台。读完一本，集齐国宝，盖章护照。" />
+
+  <!-- Favicon (emoji) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗡️</text></svg>" />
+
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+
+  <!-- 顶部导航 -->
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="brand">
+        <div class="brand-icon">🗡️</div>
+        <span>寻宝小英雄</span>
+      </div>
+      <nav class="nav-tabs" aria-label="主导航">
+        <button class="nav-tab active" data-view="home">🗺️ 地图</button>
+        <button class="nav-tab" data-view="passport">📔 护照</button>
+        <button class="nav-tab" data-view="gallery">🏛️ 国宝</button>
+        <button class="nav-tab" data-view="characters">👥 角色</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- 视图：首页（世界地图） -->
+  <section id="view-home" class="view active">
+    <div class="container">
+      <div class="hero">
+        <h1 class="hero-title">环球寻宝大冒险</h1>
+        <p class="hero-subtitle">和布卡一起出发，读完一本书，集齐国宝，盖一个章！</p>
+        <div class="hero-stats">
+          <div class="stat-card">
+            <span class="num" id="stat-countries">0</span>
+            <span class="label">已解锁国家</span>
+          </div>
+          <div class="stat-card">
+            <span class="num" id="stat-chapters">0/0</span>
+            <span class="label">完成章节</span>
+          </div>
+          <div class="stat-card">
+            <span class="num" id="stat-stamps">0</span>
+            <span class="label">护照印章</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="world-map">
+        <h2 class="world-map-title">🌏 选择你要冒险的国家</h2>
+        <div class="map-container" id="map-container"></div>
+        <p class="text-center mt-6" style="color: var(--c-text-muted); font-size: var(--text-sm);">
+          💡 闪烁的红色图钉是已解锁的国家，金色代表已完成。买了新的《寻宝记》后，告诉爸爸我就给你点亮新国家！
+        </p>
+      </div>
+
+      <div class="text-center mt-6" style="padding-bottom: var(--space-12);">
+        <button class="btn btn-ghost" id="reset-btn" style="color: var(--c-text-muted); font-size: var(--text-xs);">
+          ⚠️ 重置所有进度
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 视图：国家书页 -->
+  <section id="view-country" class="view"></section>
+
+  <!-- 视图：章节互动 -->
+  <section id="view-chapter" class="view"></section>
+
+  <!-- 视图：护照 -->
+  <section id="view-passport" class="view"></section>
+
+  <!-- 视图：国宝收集册 -->
+  <section id="view-gallery" class="view"></section>
+
+  <!-- 视图：角色图鉴 -->
+  <section id="view-characters" class="view"></section>
+
+  <!-- 通用 Modal -->
+  <div class="modal-backdrop" id="modal" role="dialog" aria-modal="true">
+    <div class="modal" id="modal-body"></div>
+  </div>
+
+  <footer style="text-align:center; padding: var(--space-8) var(--space-4); color: var(--c-text-muted); font-size: var(--text-xs); border-top: 2px dashed var(--c-text-faint);">
+    <p>读书也是一场冒险 🌸 © 寻宝小英雄伴读平台</p>
+    <p style="margin-top: var(--space-2);">配合《环球寻宝记》系列纸质书使用</p>
+  </footer>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
