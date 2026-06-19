@@ -7,7 +7,7 @@ import { countries, worldMap, seriesCharacters, treasureGallery } from './data/c
 const STORAGE_KEY = 'treasure-reader-progress-v1';
 
 const defaultState = {
-  unlocked: ['japan'],               // 已购买并解锁的国家
+  unlocked: ['japan', 'greece'],     // 已购买并解锁的国家
   chapterProgress: {                  // { japan: { 1: {completed:true, correct:4, total:4}, ... } }
     japan: {},
   },
@@ -23,7 +23,12 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return JSON.parse(JSON.stringify(defaultState));
     const saved = JSON.parse(raw);
-    return { ...JSON.parse(JSON.stringify(defaultState)), ...saved };
+    const merged = { ...JSON.parse(JSON.stringify(defaultState)), ...saved };
+    // 合并 unlocked：保证新上架的国家也能点亮，不会被老存档覆盖
+    const defaultUnlocked = defaultState.unlocked || [];
+    const savedUnlocked = Array.isArray(saved.unlocked) ? saved.unlocked : [];
+    merged.unlocked = Array.from(new Set([...defaultUnlocked, ...savedUnlocked]));
+    return merged;
   } catch {
     return JSON.parse(JSON.stringify(defaultState));
   }
