@@ -965,14 +965,30 @@ h1, h2, h3, h4 {
 .view.active { display: block; }
 
 /* === 响应式 === */
+/* iPad / 平板（641px 到 1024px）：压缩首屏高度，让地图能露出一部分 */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .hero { padding: var(--space-6) 0 var(--space-4); }
+  .hero-title { font-size: 2.4rem; margin-bottom: var(--space-2); }
+  .hero-subtitle { font-size: var(--text-base); margin-bottom: var(--space-4); }
+  .hero-stats { margin-top: var(--space-4); gap: var(--space-4); }
+  .stat-card { min-width: 120px; padding: var(--space-3) var(--space-4); }
+  .mission-card { padding: var(--space-4) var(--space-5); }
+  .world-map { padding: var(--space-5); margin: var(--space-4) 0; }
+}
+
+/* 手机（≤ 640px） */
 @media (max-width: 640px) {
   .container { padding: 0 var(--space-4); }
+  .brand span { display: none; }         /* 隐藏“寻宝小英雄”文字，只保留 icon，避免拥挤 */
   .nav-tabs { gap: 0; }
   .nav-tab { padding: var(--space-2); font-size: var(--text-xs); }
-  .hero { padding: var(--space-8) 0 var(--space-6); }
-  .hero-stats { gap: var(--space-3); }
-  .stat-card { min-width: 110px; padding: var(--space-3) var(--space-4); }
-  .world-map { padding: var(--space-4); }
+  .hero { padding: var(--space-6) 0 var(--space-4); }
+  .hero-title { font-size: 1.9rem; margin-bottom: var(--space-2); }
+  .hero-subtitle { display: none; }
+  .hero-stats { gap: var(--space-2); margin-top: var(--space-4); }
+  .stat-card { min-width: 90px; padding: var(--space-2) var(--space-3); }
+  .mission-card { padding: var(--space-3); }
+  .world-map { padding: var(--space-4); margin: var(--space-4) 0; }
   .country-pin { width: 36px; height: 36px; font-size: 1.1rem; }
   .chapter-view { padding: var(--space-5) var(--space-3); }
   .section-card { padding: var(--space-4); }

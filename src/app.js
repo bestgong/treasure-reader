@@ -1005,11 +1005,17 @@ document.addEventListener('DOMContentLoaded', () => {
     tab.addEventListener('click', () => {
       audio.click();
       const v = tab.dataset.view;
+      const alreadyHome = currentView === 'home' && v === 'home';
       if (v === 'home') renderHome();
       else if (v === 'passport') renderPassport();
       else if (v === 'gallery') renderGallery();
       else if (v === 'characters') renderCharacters();
       showView(v);
+      // 点“地图”时，如果已经在首页上，则直接滚到地图；否则回首页后滚到顶部（既有行为）
+      if (v === 'home' && alreadyHome) {
+        const mapEl = document.querySelector('.world-map');
+        if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     });
   });
 
