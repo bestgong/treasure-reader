@@ -49,7 +49,8 @@ treasure-reader/
 │   ├── style.css           # 童趣可爱样式
 │   └── data/
 │       ├── countries.js    # 国家注册表（地图坐标、角色图鉴）
-│       └── japan.js        # 日本寻宝记 10 章数据
+│       ├── japan.js        # 日本寻宝记 10 章数据
+│       └── greece.js       # 希腊寻宝记 10 章数据
 └── README.md
 ```
 
