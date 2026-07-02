@@ -1,5 +1,18 @@
-// 寻宝记伴读平台 - 主应用逻辑
+// 寻宝记伴读平台 - 主应用逻辑 v2 酷炫版
 import { countries, worldMap, seriesCharacters, treasureGallery } from './data/countries.js';
+import { worldMapSVG } from './world-map.js';
+import { ParticleField } from './particles.js';
+import { audio } from './audio.js';
+
+// 希腊/日本主题 BGM（占位，后续换为正式 CC0 素材）
+const BGM_URLS = {
+  japan:  'https://cdn.jsdelivr.net/gh/anars/blank-audio@11ecda0/2-seconds-of-silence.mp3',
+  greece: 'https://cdn.jsdelivr.net/gh/anars/blank-audio@11ecda0/2-seconds-of-silence.mp3',
+};
+
+// 全局粒子实例
+let particleBg = null;
+let particleBurst = null;
 
 // ============================================
 // 状态管理 + 本地存储
@@ -47,6 +60,12 @@ let currentView = 'home';
 let currentCountryId = null;
 let currentChapterId = null;
 
+// 家长模式检测
+const IS_PARENT_MODE = new URLSearchParams(location.search).get('parent') === '1';
+
+// 章节用时记录（仅内存）
+let currentChapterStartMs = null;
+
 // ============================================
 // 路由 / 视图切换
 // ============================================
@@ -59,13 +78,17 @@ function showView(name) {
     t.classList.toggle('active', t.dataset.view === name);
   });
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  updateParticleTheme();
+  // BGM 主题：只在国家/章节视图里根据 currentCountryId 切换
+  if ((name === 'country' || name === 'chapter') && currentCountryId && BGM_URLS[currentCountryId]) {
+    audio.playBgm(currentCountryId, BGM_URLS[currentCountryId]);
+  }
 }
 
 // ============================================
 // 渲染：首页 (世界地图)
 // ============================================
 function renderHome() {
-  // 统计
   const unlockedCount = state.unlocked.length;
   const totalChapters = state.unlocked.reduce((sum, cid) => {
     const c = countries[cid];
@@ -80,12 +103,22 @@ function renderHome() {
   document.getElementById('stat-chapters').textContent = `${completedChapters}/${totalChapters}`;
   document.getElementById('stat-stamps').textContent = stamps;
 
-  // 地图
+  // 今日冒险任务卡片
+  renderMission();
+
+  // 地图：SVG 大陆 + 图钉 + 光晕
   const mapEl = document.getElementById('map-container');
-  mapEl.innerHTML = '';
+  mapEl.innerHTML = worldMapSVG;
   worldMap.forEach((country) => {
     const isUnlocked = state.unlocked.includes(country.id);
     const isCompleted = state.passportStamps.includes(country.id);
+
+    const glow = document.createElement('div');
+    glow.className = 'country-glow ' + (isCompleted ? 'gold' : isUnlocked ? 'red' : 'dim');
+    glow.style.left = country.x + '%';
+    glow.style.top = country.y + '%';
+    mapEl.appendChild(glow);
+
     const pin = document.createElement('button');
     pin.className = 'country-pin';
     if (isUnlocked) pin.classList.add('available');
@@ -96,10 +129,175 @@ function renderHome() {
     pin.innerHTML += `<span class="pin-tooltip">${country.name}${isUnlocked ? '' : ' · 待解锁'}</span>`;
     pin.disabled = !isUnlocked;
     if (isUnlocked) {
-      pin.addEventListener('click', () => openCountry(country.id));
+      pin.addEventListener('click', () => { audio.click(); openCountry(country.id); });
     }
     mapEl.appendChild(pin);
   });
+
+  // 布卡飞机穿梭
+  startBukaPlane(mapEl);
+
+  // 家长模式面板
+  if (IS_PARENT_MODE) renderParentPanel();
+}
+
+// ============================================
+// 今日冒险任务智能推荐
+// ============================================
+function renderMission() {
+  const el = document.getElementById('mission-container');
+  if (!el) return;
+  let target = null;
+  for (const cid of state.unlocked) {
+    const c = countries[cid];
+    if (!c) continue;
+    const p = state.chapterProgress[cid] || {};
+    const done = c.chapters.filter((ch) => p[ch.id] && p[ch.id].completed).length;
+    if (done < c.chapters.length) {
+      const nextCh = c.chapters.find((ch) => !p[ch.id] || !p[ch.id].completed);
+      target = { country: c, chapter: nextCh, done, total: c.chapters.length };
+      break;
+    }
+  }
+  if (!target) {
+    el.innerHTML = `
+      <div class="mission-card">
+        <div class="mission-icon">🎉</div>
+        <div class="mission-body">
+          <span class="mission-tag">冒险家</span>
+          <h3 class="mission-title">你已经读完现有所有书啦！</h3>
+          <p class="mission-desc">去国宝馆重温你的战利品，或等爸爸买新的《寻宝记》。</p>
+        </div>
+      </div>`;
+    return;
+  }
+  const { country, chapter, done, total } = target;
+  const pct = Math.round((done / total) * 100);
+  el.innerHTML = `
+    <div class="mission-card">
+      <div class="mission-icon">${chapter.emoji || '📖'}</div>
+      <div class="mission-body">
+        <span class="mission-tag">🌟 今日推荐</span>
+        <div class="mission-title">继续《${country.bookTitle}》· 第 ${chapter.id} 章：${chapter.title}</div>
+        <p class="mission-desc">已读到 ${done}/${total} 章 (${pct}%)——${chapter.summary}</p>
+        <button class="mission-cta" data-country="${country.id}" data-chapter="${chapter.id}">🚀 现在就去冒险</button>
+      </div>
+    </div>`;
+  el.querySelector('.mission-cta').addEventListener('click', (e) => {
+    audio.click();
+    currentCountryId = e.target.dataset.country;
+    openChapter(parseInt(e.target.dataset.chapter, 10));
+  });
+}
+
+// ============================================
+// 布卡飞机穿梭动画
+// ============================================
+function startBukaPlane(mapEl) {
+  mapEl.querySelectorAll('.buka-plane, .plane-trail').forEach((el) => el.remove());
+  const unlockedCountries = worldMap.filter((c) => state.unlocked.includes(c.id));
+  if (unlockedCountries.length < 2) return;
+
+  const plane = document.createElement('div');
+  plane.className = 'buka-plane';
+  plane.innerHTML = `<span class="plane-emoji">✈️</span>`;
+  mapEl.appendChild(plane);
+
+  let curIdx = 0;
+  const durationMs = 5500;
+  const trailInterval = 130;
+  let lastTrail = 0;
+  let startTs = null;
+  let leg = { from: unlockedCountries[0], to: unlockedCountries[1 % unlockedCountries.length] };
+
+  function tick(ts) {
+    if (!document.getElementById('view-home').classList.contains('active') || !document.body.contains(plane)) return;
+    if (!startTs) startTs = ts;
+    const progress = Math.min(1, (ts - startTs) / durationMs);
+    const x = leg.from.x + (leg.to.x - leg.from.x) * progress;
+    const y = leg.from.y + (leg.to.y - leg.from.y) * progress - Math.sin(progress * Math.PI) * 4;
+    plane.style.left = x + '%';
+    plane.style.top = y + '%';
+    const dx = leg.to.x - leg.from.x;
+    plane.style.transform = `translate(-50%, -50%) scaleX(${dx > 0 ? 1 : -1})`;
+    if (ts - lastTrail > trailInterval) {
+      lastTrail = ts;
+      const trail = document.createElement('div');
+      trail.className = 'plane-trail';
+      trail.style.left = x + '%';
+      trail.style.top = y + '%';
+      mapEl.appendChild(trail);
+      setTimeout(() => trail.remove(), 1500);
+    }
+    if (progress >= 1) {
+      curIdx = (curIdx + 1) % unlockedCountries.length;
+      const nextIdx = (curIdx + 1) % unlockedCountries.length;
+      leg = { from: unlockedCountries[curIdx], to: unlockedCountries[nextIdx] };
+      startTs = ts + 300;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ============================================
+// 家长模式面板
+// ============================================
+function renderParentPanel() {
+  const home = document.getElementById('view-home').querySelector('.container');
+  home.querySelectorAll('.parent-panel').forEach((el) => el.remove());
+  const rows = [];
+  let totalCorrect = 0, totalQ = 0, totalDone = 0, totalCh = 0;
+  for (const cid of state.unlocked) {
+    const c = countries[cid];
+    if (!c) continue;
+    const prog = state.chapterProgress[cid] || {};
+    for (const ch of c.chapters) {
+      totalCh++;
+      const p = prog[ch.id];
+      if (p && p.completed) {
+        totalDone++;
+        totalCorrect += p.correct || 0;
+        totalQ += p.total || 0;
+        rows.push({ book: c.bookTitle, chId: ch.id, title: ch.title, correct: p.correct, total: p.total, pct: Math.round(((p.correct||0)/(p.total||1))*100) });
+      }
+    }
+  }
+  const accuracy = totalQ ? Math.round((totalCorrect / totalQ) * 100) : 0;
+  const panel = document.createElement('div');
+  panel.className = 'parent-panel';
+  panel.innerHTML = `
+    <h2>👨‍👧 家长模式面板</h2>
+    <p style="font-size: var(--text-sm); color:#666; margin-bottom: var(--space-3);">只有 <code>?parent=1</code> 时才显示，孩子看不到。</p>
+    <div class="parent-stats-grid">
+      <div class="parent-stat"><span class="parent-stat-num">${totalDone}/${totalCh}</span><span class="parent-stat-label">已完成章节</span></div>
+      <div class="parent-stat"><span class="parent-stat-num">${accuracy}%</span><span class="parent-stat-label">平均正确率</span></div>
+      <div class="parent-stat"><span class="parent-stat-num">${totalCorrect}/${totalQ}</span><span class="parent-stat-label">总答对/总题</span></div>
+      <div class="parent-stat"><span class="parent-stat-num">${state.passportStamps.length}</span><span class="parent-stat-label">已盖章国家</span></div>
+    </div>
+    <button class="btn btn-soft" id="parent-export-btn">📄 导出 CSV</button>
+    <table class="parent-table">
+      <thead><tr><th>书</th><th>章</th><th>标题</th><th>得分</th><th>正确率</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr><td>${r.book}</td><td>第${r.chId}章</td><td>${r.title}</td><td>${r.correct}/${r.total}</td><td>${r.pct}%</td></tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:#999;">尚无完成记录</td></tr>'}</tbody>
+    </table>
+  `;
+  home.appendChild(panel);
+  panel.querySelector('#parent-export-btn').addEventListener('click', () => exportParentCSV(rows, accuracy));
+}
+
+function exportParentCSV(rows, accuracy) {
+  const lines = ['书籍,章号,章节标题,答对,总题数,正确率(%)'];
+  rows.forEach((r) => lines.push(`"${r.book}",${r.chId},"${r.title}",${r.correct},${r.total},${r.pct}`));
+  lines.push('');
+  lines.push(`平均正确率,${accuracy}%`);
+  const csv = '\ufeff' + lines.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `寻宝小英雄周报_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ============================================
@@ -315,6 +513,7 @@ function submitQuiz(chapterId) {
   let correct = 0;
   const answers = [];
   let allAnswered = true;
+  let streak = 0, maxStreak = 0;
 
   qBoxes.forEach((qBox, idx) => {
     const selected = qBox.querySelector('.option.selected');
@@ -328,15 +527,28 @@ function submitQuiz(chapterId) {
     const correctAns = parseInt(qBox.dataset.answer, 10);
     const isCorrect = chosen === correctAns;
 
-    // 视觉反馈
+    // 视觉反馈 + 音效 + 动画
     qBox.querySelectorAll('.option').forEach((o) => {
       const oi = parseInt(o.dataset.opt, 10);
       if (oi === correctAns) o.classList.add('correct');
       else if (oi === chosen && !isCorrect) o.classList.add('wrong');
     });
+    // 交错触发动画（错开时序，比一次全响更有节奏）
+    setTimeout(() => {
+      const sel = qBox.querySelector('.option.selected');
+      if (sel) sel.classList.add(isCorrect ? 'correct-flash' : 'wrong-shake');
+      if (isCorrect) audio.correct(); else audio.wrong();
+    }, idx * 380);
+
     qBox.querySelector('[data-explain]').style.display = 'block';
     qBox.dataset.locked = '1';
-    if (isCorrect) correct++;
+    if (isCorrect) {
+      correct++;
+      streak++;
+      maxStreak = Math.max(maxStreak, streak);
+    } else {
+      streak = 0;
+    }
   });
 
   if (!allAnswered) {
@@ -412,10 +624,88 @@ function submitQuiz(chapterId) {
     </div>
   `;
 
-  // 更新顶部七支刀进度
-  document.querySelectorAll('.sword-piece').forEach((p, i) => {
-    p.classList.toggle('unlocked', i < (state.swordPieces[currentCountryId] || 0));
+  // 更新顶部七支刀进度 + 碎片飞入动画
+  const newPieceCount = state.swordPieces[currentCountryId] || 0;
+  const prevPieceEls = document.querySelectorAll('.sword-piece');
+  const submitBtn = document.getElementById('submit-quiz-btn');
+  prevPieceEls.forEach((p, i) => {
+    const wasUnlocked = p.classList.contains('unlocked');
+    const nowUnlocked = i < newPieceCount;
+    if (nowUnlocked && !wasUnlocked) {
+      // 从提交按钮位置飞到该槽位
+      flyPieceTo(submitBtn, p, country.treasure.icon);
+      setTimeout(() => {
+        p.classList.add('unlocked', 'just-earned');
+        audio.badge();
+      }, 850);
+    } else {
+      p.classList.toggle('unlocked', nowUnlocked);
+    }
   });
+
+  // Combo 徽章：全对或连对 3 题以上
+  if (correct === chapter.questions.length && chapter.questions.length >= 3) {
+    showComboBadge(`🏆 全对 COMBO x${chapter.questions.length}`);
+  } else if (maxStreak >= 3) {
+    showComboBadge(`⚡ ${maxStreak} 连击！`);
+  }
+
+  // 完成整本书 → 大庆祝
+  if (completedCount === totalChapters) {
+    setTimeout(() => launchFireworks(country), 1200);
+  }
+}
+
+// 碎片从起点飞到终点
+function flyPieceTo(fromEl, toEl, icon) {
+  if (!fromEl || !toEl) return;
+  const fromRect = fromEl.getBoundingClientRect();
+  const toRect = toEl.getBoundingClientRect();
+  const piece = document.createElement('div');
+  piece.className = 'piece-flying';
+  piece.textContent = icon;
+  piece.style.left = (fromRect.left + fromRect.width / 2) + 'px';
+  piece.style.top = (fromRect.top + fromRect.height / 2) + 'px';
+  piece.style.transform = 'translate(-50%, -50%) scale(1) rotate(0deg)';
+  document.body.appendChild(piece);
+  requestAnimationFrame(() => {
+    const dx = (toRect.left + toRect.width / 2) - (fromRect.left + fromRect.width / 2);
+    const dy = (toRect.top + toRect.height / 2) - (fromRect.top + fromRect.height / 2);
+    piece.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.6) rotate(720deg)`;
+    piece.style.opacity = '0.2';
+  });
+  setTimeout(() => piece.remove(), 1000);
+}
+
+function showComboBadge(text) {
+  const badge = document.createElement('div');
+  badge.className = 'combo-badge';
+  badge.textContent = text;
+  document.body.appendChild(badge);
+  audio.badge();
+  // 从 canvas 中心爆发彩纸
+  if (particleBurst) {
+    particleBurst.burst(window.innerWidth / 2, window.innerHeight * 0.3, 40, 'confetti');
+  }
+  setTimeout(() => badge.remove(), 2000);
+}
+
+// 完成整本书烟花庆祝
+function launchFireworks(country) {
+  if (!particleBurst) return;
+  audio.fanfare();
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight * 0.4;
+  // 5 波烟花
+  for (let i = 0; i < 5; i++) {
+    setTimeout(() => {
+      const x = centerX + (Math.random() - 0.5) * 400;
+      const y = centerY + (Math.random() - 0.5) * 200;
+      particleBurst.burst(x, y, 60, 'fireworks');
+      particleBurst.burst(x, y, 30, 'confetti');
+    }, i * 500);
+  }
+  setTimeout(() => showCelebration(country), 2500);
 }
 
 // ============================================
@@ -437,11 +727,18 @@ function showCelebration(country) {
   const modal = document.getElementById('modal');
   const body = document.getElementById('modal-body');
   body.innerHTML = `
-    <div class="modal-icon">🏆</div>
-    <h2>恭喜完成《${country.bookTitle}》！</h2>
-    <p>你已经成功收集到完整的 <strong>${country.treasure.name}</strong>！${country.treasure.description}</p>
-    <p style="margin-top: var(--space-3); color: var(--c-primary); font-family: var(--font-display);">护照已盖章 · 国宝已收藏</p>
-    <button class="btn" onclick="window.app.closeModal()">太棒了！</button>
+    <div class="big-celebration">
+      <span class="medal-huge">🏆</span>
+      <h2 style="margin-top: var(--space-3);">恭喜完成《${country.bookTitle}》！</h2>
+      <p style="font-size: var(--text-base); color: var(--c-text-muted); margin-top: var(--space-3);">
+        你成功集齐了完整的 <strong style="color: var(--c-primary);">${country.treasure.icon} ${country.treasure.name}</strong>
+      </p>
+      <p style="margin: var(--space-3) 0; color: var(--c-text-muted); font-size: var(--text-sm);">${country.treasure.description}</p>
+      <p style="margin-top: var(--space-4); color: var(--c-primary); font-family: var(--font-display); font-size: var(--text-lg);">
+        📔 护照已盖章 · 🏛️ 国宝已收藏
+      </p>
+      <button class="btn" onclick="window.app.closeModal()" style="margin-top: var(--space-4);">🎊 太棒了！</button>
+    </div>
   `;
   modal.classList.add('open');
 }
@@ -451,31 +748,79 @@ function showCelebration(country) {
 // ============================================
 function renderPassport() {
   const el = document.getElementById('view-passport');
+  // 已解锁国家（无论是否盖章）都有一页
+  const pages = state.unlocked.map((id) => worldMap.find((c) => c.id === id)).filter(Boolean);
+  const totalPages = pages.length + 1; // +1 是封面
+
   el.innerHTML = `
     <div class="container">
       <div class="hero">
         <h1 class="hero-title">📔 我的护照</h1>
-        <p class="hero-subtitle">每读完一本《寻宝记》就盖一个章！</p>
+        <p class="hero-subtitle">点击翻页箭头，看看你去过哪些国家</p>
       </div>
-      <div class="passport">
-        <div class="passport-title">✦ 寻宝小英雄护照 ✦</div>
-        <div class="passport-stamps">
-          ${worldMap
-            .map((c) => {
-              const earned = state.passportStamps.includes(c.id);
-              return `
-              <div class="stamp ${earned ? 'earned' : ''}" title="${c.name}">
-                ${earned ? c.flag : '?'}
-              </div>`;
-            })
-            .join('')}
+      <div class="passport-book">
+        <div class="passport-pages" id="passport-pages">
+          <div class="passport-page cover" data-page-idx="0">
+            <div style="font-size: 4rem;">📔</div>
+            <div class="p-title">寻宝小英雄护照</div>
+            <div class="p-sub">World Treasure Hunter Passport</div>
+            <p style="margin-top: var(--space-4); font-family: var(--font-handwrite); font-size: var(--text-lg);">
+              已收集 ${state.passportStamps.length} / ${pages.length} 国印章
+            </p>
+            <p style="margin-top: var(--space-4); font-size: var(--text-xs); opacity: 0.8;">↓ 点击右下角翻页 ↓</p>
+          </div>
+          ${pages.map((c, i) => {
+            const earned = state.passportStamps.includes(c.id);
+            return `
+            <div class="passport-page" data-page-idx="${i + 1}" style="z-index: ${100 - i};">
+              <div class="passport-page-header">
+                <span class="passport-flag">${c.flag}</span>
+                <div style="text-align: right;">
+                  <div class="passport-country-name">${c.name}</div>
+                  <div style="font-size: var(--text-xs); color: rgba(107,74,43,0.6); font-family: var(--font-handwrite);">${c.nameEn} · ${c.capital || ''}</div>
+                </div>
+              </div>
+              <div class="passport-stamp-visual ${earned ? 'earned' : ''}">
+                ${earned ? '✓ VISITED' : '未 访 问'}
+              </div>
+              <p style="text-align: center; font-family: var(--font-handwrite); color: #6b4a2b; margin-top: var(--space-3);">
+                ${earned ? '布卡与你一起完成了这段冒险' : '这本书还等待你去解锁…'}
+              </p>
+              <div class="passport-page-num">— ${i + 1} / ${pages.length} —</div>
+            </div>`;
+          }).join('')}
         </div>
-        <p style="text-align: center; margin-top: var(--space-6); font-size: var(--text-sm); opacity: 0.85;">
-          已盖章：${state.passportStamps.length} 国
-        </p>
+      </div>
+      <div class="passport-nav">
+        <button id="pp-prev">← 上一页</button>
+        <span id="pp-indicator" style="align-self:center; font-family: var(--font-display); color: var(--c-text-muted);">封面</span>
+        <button id="pp-next">下一页 →</button>
       </div>
     </div>
   `;
+
+  // 翻页逻辑
+  let currentPage = 0;
+  const pagesEls = el.querySelectorAll('.passport-page');
+  const prev = el.querySelector('#pp-prev');
+  const next = el.querySelector('#pp-next');
+  const ind = el.querySelector('#pp-indicator');
+  function updatePages() {
+    pagesEls.forEach((p, i) => {
+      p.classList.toggle('flipped', i < currentPage);
+    });
+    prev.disabled = currentPage === 0;
+    next.disabled = currentPage >= totalPages - 1;
+    if (currentPage === 0) ind.textContent = '封面';
+    else ind.textContent = `${pages[currentPage - 1]?.name || ''} · ${currentPage}/${pages.length}`;
+  }
+  prev.addEventListener('click', () => {
+    if (currentPage > 0) { currentPage--; audio.click(); updatePages(); }
+  });
+  next.addEventListener('click', () => {
+    if (currentPage < totalPages - 1) { currentPage++; audio.stamp(); updatePages(); }
+  });
+  updatePages();
 }
 
 // ============================================
@@ -486,27 +831,50 @@ function renderGallery() {
   el.innerHTML = `
     <div class="container">
       <div class="hero">
-        <h1 class="hero-title">🏛️ 国宝收集册</h1>
-        <p class="hero-subtitle">每读完一本书就解锁一件国宝</p>
+        <h1 class="hero-title">🏛️ 国宝陈列馆</h1>
+        <p class="hero-subtitle">3D 展柜 · 悬停可翻转 · 每读完一本书解锁一件国宝</p>
       </div>
-      <div class="treasure-gallery">
+      <div class="treasure-gallery-3d">
         ${treasureGallery
           .map((t) => {
             const collected = state.collectedTreasures.includes(t.id);
             const unlocked = state.unlocked.includes(t.id);
-            const cls = collected ? 'collected' : unlocked ? '' : 'locked';
+            const lockedFace = collected ? '' : 'locked';
             return `
-            <div class="treasure-card ${cls}">
-              <div class="treasure-icon">${collected ? t.icon : '❓'}</div>
-              <h3 class="treasure-name">${collected ? t.name : '？？？'}</h3>
-              <p class="treasure-country">${t.country}</p>
-              <p class="treasure-desc">${collected ? t.desc : (unlocked ? '完成本书所有章节即可收藏' : t.desc)}</p>
+            <div class="treasure-3d-card" data-treasure="${t.id}">
+              <div class="treasure-3d-face front ${lockedFace}">
+                <div class="treasure-3d-icon">${collected ? t.icon : '🔒'}</div>
+                <h3 style="font-family: var(--font-display); font-size: var(--text-lg); color: var(--c-ink); margin-bottom: 4px;">${collected ? t.name : '？？？'}</h3>
+                <p style="color: var(--c-text-muted); font-size: var(--text-sm); margin-bottom: 6px;">${t.country}</p>
+                <p style="font-size: var(--text-xs); color: var(--c-text-muted); line-height: 1.4;">${collected ? t.desc : (unlocked ? '完成本书所有章节即可收藏' : '待爸爸购买本书解锁')}</p>
+                <div class="treasure-3d-shine"></div>
+              </div>
             </div>`;
           })
           .join('')}
       </div>
     </div>
   `;
+  // 点击已收藏的国宝：显示故事
+  el.querySelectorAll('.treasure-3d-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.treasure;
+      const t = treasureGallery.find((x) => x.id === id);
+      if (!t || !state.collectedTreasures.includes(id)) return;
+      audio.click();
+      const modal = document.getElementById('modal');
+      const body = document.getElementById('modal-body');
+      body.innerHTML = `
+        <div style="text-align:center;">
+          <div style="font-size: 5rem; margin-bottom: var(--space-3);">${t.icon}</div>
+          <h2>${t.name}</h2>
+          <p style="color: var(--c-text-muted); margin-top: var(--space-2);">${t.country} 国宝</p>
+          <p style="margin: var(--space-4) 0; line-height: 1.6;">${t.desc}</p>
+          <button class="btn" onclick="window.app.closeModal()">合上展柜</button>
+        </div>`;
+      modal.classList.add('open');
+    });
+  });
 }
 
 // ============================================
@@ -560,20 +928,29 @@ function closeModal() {
 // 樱花飘落（装饰）
 // ============================================
 function startBlossoms() {
-  const blossoms = ['🌸', '🌺', '🍃'];
-  function spawn() {
-    const el = document.createElement('div');
-    el.className = 'floating-blossom';
-    el.textContent = blossoms[Math.floor(Math.random() * blossoms.length)];
-    el.style.left = Math.random() * 100 + 'vw';
-    el.style.animationDuration = 12 + Math.random() * 12 + 's';
-    el.style.fontSize = 0.8 + Math.random() * 1.2 + 'rem';
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 25000);
+  // v2: 用 Canvas 粒子系统替代 emoji DOM 元素
+  const bgCanvas = document.getElementById('particle-canvas');
+  const burstCanvas = document.getElementById('burst-canvas');
+  if (bgCanvas) {
+    particleBg = new ParticleField(bgCanvas, { theme: 'sakura', maxParticles: 40, spawnRate: 0.35 });
+    particleBg.start();
   }
-  setInterval(spawn, 4000);
-  // 启动时先撒几片
-  for (let i = 0; i < 3; i++) setTimeout(spawn, i * 1500);
+  if (burstCanvas) {
+    particleBurst = new ParticleField(burstCanvas, { theme: 'confetti', maxParticles: 200, spawnRate: 0 });
+    particleBurst.start();
+  }
+}
+
+// 根据当前上下文切换粒子主题
+function updateParticleTheme() {
+  if (!particleBg) return;
+  if (currentView === 'chapter' || currentView === 'country') {
+    if (currentCountryId === 'greece') particleBg.setTheme('olive');
+    else if (currentCountryId === 'japan') particleBg.setTheme('sakura');
+    else particleBg.setTheme('sakura');
+  } else {
+    particleBg.setTheme('sakura');
+  }
 }
 
 // ============================================
@@ -626,6 +1003,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 导航 tab
   document.querySelectorAll('.nav-tab').forEach((tab) => {
     tab.addEventListener('click', () => {
+      audio.click();
       const v = tab.dataset.view;
       if (v === 'home') renderHome();
       else if (v === 'passport') renderPassport();
@@ -643,6 +1021,30 @@ document.addEventListener('DOMContentLoaded', () => {
   // 重置按钮
   const resetBtn = document.getElementById('reset-btn');
   if (resetBtn) resetBtn.addEventListener('click', resetProgress);
+
+  // 音频控制
+  const sfxBtn = document.getElementById('sfx-toggle');
+  const bgmBtn = document.getElementById('bgm-toggle');
+  function refreshAudioBtns() {
+    const p = audio.getPrefs();
+    if (sfxBtn) {
+      sfxBtn.textContent = p.sfxOn ? '🔊' : '🔇';
+      sfxBtn.className = 'audio-btn ' + (p.sfxOn ? 'on' : 'off');
+    }
+    if (bgmBtn) {
+      bgmBtn.textContent = p.bgmOn ? '🎵' : '🎶';
+      bgmBtn.className = 'audio-btn ' + (p.bgmOn ? 'on' : 'off');
+    }
+  }
+  if (sfxBtn) sfxBtn.addEventListener('click', () => { audio.setSfxOn(!audio.getPrefs().sfxOn); refreshAudioBtns(); audio.click(); });
+  if (bgmBtn) bgmBtn.addEventListener('click', () => {
+    const now = !audio.getPrefs().bgmOn;
+    audio.setBgmOn(now);
+    if (now && currentCountryId && BGM_URLS[currentCountryId]) audio.playBgm(currentCountryId, BGM_URLS[currentCountryId]);
+    if (!now) audio.stopBgm();
+    refreshAudioBtns();
+  });
+  refreshAudioBtns();
 
   startBlossoms();
   showView('home');

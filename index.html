@@ -14,6 +14,10 @@
 </head>
 <body>
 
+  <!-- 全站背景粒子画布 -->
+  <canvas id="particle-canvas" aria-hidden="true"></canvas>
+  <canvas id="burst-canvas" aria-hidden="true"></canvas>
+
   <!-- 顶部导航 -->
   <header class="topbar">
     <div class="container topbar-inner">
@@ -27,6 +31,10 @@
         <button class="nav-tab" data-view="gallery">🏛️ 国宝</button>
         <button class="nav-tab" data-view="characters">👥 角色</button>
       </nav>
+      <div class="audio-controls">
+        <button class="audio-btn" id="sfx-toggle" title="音效">🔈</button>
+        <button class="audio-btn" id="bgm-toggle" title="背景音乐">🎵</button>
+      </div>
     </div>
   </header>
 
@@ -51,6 +59,9 @@
           </div>
         </div>
       </div>
+
+      <!-- 今日冒险任务卡片（智能推荐） -->
+      <div id="mission-container"></div>
 
       <div class="world-map">
         <h2 class="world-map-title">🌏 选择你要冒险的国家</h2>

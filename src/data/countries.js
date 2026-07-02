@@ -13,26 +13,27 @@ export const countries = {
   // usa: usaData,
 };
 
-// 世界地图上所有可显示的国家位置（用经纬度近似的相对坐标，左上为 0,0）
-// 即使没买的国家也会在地图上以"待解锁"状态显示
+// 世界地图上所有可显示的国家位置（相对坐标，左上为 0,0，右下为 100,100）
+// 与 world-map.js 的 SVG viewBox 1000x500 联动：svgX = x*10, svgY = y*5
+// 已根据真实大陆位置校准
 export const worldMap = [
-  { id: 'usa',     name: '美国',   nameEn: 'USA',     flag: '🇺🇸', x: 18, y: 38, available: false },
-  { id: 'mexico',  name: '墨西哥', nameEn: 'Mexico',  flag: '🇲🇽', x: 20, y: 50, available: false },
-  { id: 'brazil',  name: '巴西',   nameEn: 'Brazil',  flag: '🇧🇷', x: 32, y: 65, available: false },
-  { id: 'uk',      name: '英国',   nameEn: 'UK',      flag: '🇬🇧', x: 47, y: 32, available: false },
-  { id: 'france',  name: '法国',   nameEn: 'France',  flag: '🇫🇷', x: 49, y: 38, available: false },
-  { id: 'germany', name: '德国',   nameEn: 'Germany', flag: '🇩🇪', x: 51, y: 35, available: false },
-  { id: 'italy',   name: '意大利', nameEn: 'Italy',   flag: '🇮🇹', x: 52, y: 42, available: false },
-  { id: 'spain',   name: '西班牙', nameEn: 'Spain',   flag: '🇪🇸', x: 46, y: 43, available: false },
-  { id: 'greece',  name: '希腊',   nameEn: 'Greece',  flag: '🇬🇷', x: 55, y: 44, available: true  },
-  { id: 'egypt',   name: '埃及',   nameEn: 'Egypt',   flag: '🇪🇬', x: 57, y: 48, available: false },
-  { id: 'turkey',  name: '土耳其', nameEn: 'Turkey',  flag: '🇹🇷', x: 58, y: 42, available: false },
-  { id: 'india',   name: '印度',   nameEn: 'India',   flag: '🇮🇳', x: 68, y: 50, available: false },
-  { id: 'china',   name: '中国',   nameEn: 'China',   flag: '🇨🇳', x: 76, y: 42, available: false },
-  { id: 'japan',   name: '日本',   nameEn: 'Japan',   flag: '🇯🇵', x: 84, y: 41, available: true  },
-  { id: 'thailand',name: '泰国',   nameEn: 'Thailand',flag: '🇹🇭', x: 75, y: 53, available: false },
-  { id: 'australia',name:'澳大利亚',nameEn:'Australia',flag: '🇦🇺', x: 84, y: 70, available: false },
-  { id: 'russia',  name: '俄罗斯', nameEn: 'Russia',  flag: '🇷🇺', x: 65, y: 28, available: false },
+  { id: 'usa',     name: '美国',   nameEn: 'USA',     flag: '🇺🇸', x: 15,  y: 30, available: false, capital: '华盛顿' },
+  { id: 'mexico',  name: '墨西哥', nameEn: 'Mexico',  flag: '🇲🇽', x: 19,  y: 47, available: false, capital: '墨西哥城' },
+  { id: 'brazil',  name: '巴西',   nameEn: 'Brazil',  flag: '🇧🇷', x: 30,  y: 74, available: false, capital: '巴西利亚' },
+  { id: 'uk',      name: '英国',   nameEn: 'UK',      flag: '🇬🇧', x: 46,  y: 28, available: false, capital: '伦敦' },
+  { id: 'france',  name: '法国',   nameEn: 'France',  flag: '🇫🇷', x: 49,  y: 32, available: false, capital: '巴黎' },
+  { id: 'germany', name: '德国',   nameEn: 'Germany', flag: '🇩🇪', x: 52,  y: 29, available: false, capital: '柏林' },
+  { id: 'italy',   name: '意大利', nameEn: 'Italy',   flag: '🇮🇹', x: 53,  y: 36, available: false, capital: '罗马' },
+  { id: 'spain',   name: '西班牙', nameEn: 'Spain',   flag: '🇪🇸', x: 47,  y: 38, available: false, capital: '马德里' },
+  { id: 'greece',  name: '希腊',   nameEn: 'Greece',  flag: '🇬🇷', x: 55.5,y: 39, available: true,  capital: '雅典' },
+  { id: 'egypt',   name: '埃及',   nameEn: 'Egypt',   flag: '🇪🇬', x: 57,  y: 47, available: false, capital: '开罗' },
+  { id: 'turkey',  name: '土耳其', nameEn: 'Turkey',  flag: '🇹🇷', x: 59,  y: 40, available: false, capital: '安卡拉' },
+  { id: 'india',   name: '印度',   nameEn: 'India',   flag: '🇮🇳', x: 69,  y: 53, available: false, capital: '新德里' },
+  { id: 'china',   name: '中国',   nameEn: 'China',   flag: '🇨🇳', x: 77,  y: 41, available: false, capital: '北京' },
+  { id: 'japan',   name: '日本',   nameEn: 'Japan',   flag: '🇯🇵', x: 87,  y: 40, available: true,  capital: '东京' },
+  { id: 'thailand',name: '泰国',   nameEn: 'Thailand',flag: '🇹🇭', x: 80,  y: 55, available: false, capital: '曼谷' },
+  { id: 'australia',name:'澳大利亚',nameEn:'Australia',flag: '🇦🇺', x: 85, y: 76, available: false, capital: '堪培拉' },
+  { id: 'russia',  name: '俄罗斯', nameEn: 'Russia',  flag: '🇷🇺', x: 68,  y: 22, available: false, capital: '莫斯科' },
 ];
 
 // 系列主角图鉴（跨国家累积）
